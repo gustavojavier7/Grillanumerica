@@ -74,15 +74,24 @@
             border: 1px solid #000;
         }
 
-        @keyframes aiHintPulse {
+        @keyframes aiHintPulse1 {
           0%   { outline: 0px solid transparent; filter: brightness(1); }
-          50%  { outline: 2px dotted #000; filter: brightness(1.15); }
+          50%  { outline: 3px solid #0000FF; filter: brightness(1.3); }
           100% { outline: 0px solid transparent; filter: brightness(1); }
         }
-        .cell.ai-hint {
-          animation: aiHintPulse 0.9s ease-in-out infinite;
-          z-index: 10;
+        @keyframes aiHintPulse2 {
+          0%   { outline: 0px solid transparent; filter: brightness(1); }
+          50%  { outline: 3px solid #FF00FF; filter: brightness(1.3); }
+          100% { outline: 0px solid transparent; filter: brightness(1); }
         }
+        @keyframes aiHintPulse3 {
+          0%   { outline: 0px solid transparent; filter: brightness(1); }
+          50%  { outline: 3px solid #00FFFF; filter: brightness(1.3); }
+          100% { outline: 0px solid transparent; filter: brightness(1); }
+        }
+        .cell.ai-hint-1 { animation: aiHintPulse1 1s ease-in-out infinite; z-index: 10; }
+        .cell.ai-hint-2 { animation: aiHintPulse2 1s ease-in-out infinite 0.2s; z-index: 9; }
+        .cell.ai-hint-3 { animation: aiHintPulse3 1s ease-in-out infinite 0.4s; z-index: 8; }
         
         #ui-container {
             background-color: #c0c0c0;
@@ -173,6 +182,21 @@
             flex-grow: 1;
         }
 
+        #ai-top-list {
+            font-size: 9px;
+            margin-top: 5px;
+            border-top: 1px dotted #808080;
+            padding-top: 4px;
+        }
+        .ai-top-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 1px 0;
+        }
+        .ai-color-1 { color: #0000FF; }
+        .ai-color-2 { color: #FF00FF; }
+        .ai-color-3 { color: #008080; }
+
         /* Responsividad tipo Grilla */
         @media (max-width: 768px) {
             #main-container {
@@ -217,16 +241,14 @@
         <div class="stat-box">
             <div id="combo" class="stat-value">x1</div>
         </div>
-        <div class="stat-label">IA-ASSIST</div>
-        <div class="stat-box" style="text-align:left">
+        <div class="stat-label">IA-ASSIST (MÁX 3)</div>
+        <div class="stat-box" style="text-align:left; min-height:80px;">
           <label style="font-size:11px; display:flex; gap:8px; align-items:center; cursor:pointer;">
             <input type="checkbox" id="aiAssistToggle">
             Activar sugerencias
           </label>
-          <div style="margin-top:6px; font-size:11px;">
-            Mejor cascada: <b><span id="aiBestCycles">0</span></b>
-          </div>
           <div id="aiStatus" style="margin-top:4px; font-size:9px; color:#404040; font-weight:bold;">IA: INACTIVA</div>
+          <div id="ai-top-list"></div>
         </div>
         <div class="stat-label">POBLACIÓN</div>
         <div class="stat-box" id="population-list" style="text-align: left; padding: 4px;">
@@ -367,7 +389,7 @@
             if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
                 // swap confirmado: detener IA para no interferir
                 stopAiSearch();
-                clearAiHint();
+                clearAiHints();
                 
                 swap(selectedCell.r, selectedCell.c, r, c);
                 checkAndRemoveMatches(true);
@@ -546,7 +568,7 @@
     let aiEnabled = false;
     let aiRunning = false;
     let aiAbort = false;
-    let aiBest = { cycles: 0, r1: -1, c1: -1, r2: -1, c2: -1 };
+    let aiTopSwaps = []; // Almacena hasta 3 mejores swaps
     let gameEnded = false;
 
     function updateAiStatus(text) {
@@ -558,10 +580,9 @@
       aiEnabled = v;
       if (!aiEnabled) {
         stopAiSearch();
-        clearAiHint();
+        clearAiHints();
         updateAiStatus('INACTIVA');
-        const el = document.getElementById('aiBestCycles');
-        if (el) el.textContent = '0';
+        document.getElementById('ai-top-list').innerHTML = '';
       } else {
         if (!isProcessing) startAiSearch();
       }
@@ -572,16 +593,30 @@
       aiRunning = false;
     }
 
-    function clearAiHint() {
-      if (aiBest.r1 >= 0) cellElements[aiBest.r1]?.[aiBest.c1]?.classList.remove('ai-hint');
-      if (aiBest.r2 >= 0) cellElements[aiBest.r2]?.[aiBest.c2]?.classList.remove('ai-hint');
+    function clearAiHints() {
+      aiTopSwaps.forEach((swap, index) => {
+        cellElements[swap.r1]?.[swap.c1]?.classList.remove(`ai-hint-${index + 1}`);
+        cellElements[swap.r2]?.[swap.c2]?.classList.remove(`ai-hint-${index + 1}`);
+      });
     }
 
-    function applyAiHint(r1,c1,r2,c2) {
-      clearAiHint();
-      if (r1 < 0) return;
-      cellElements[r1][c1].classList.add('ai-hint');
-      cellElements[r2][c2].classList.add('ai-hint');
+    function applyAiHints() {
+      clearAiHints();
+      const listEl = document.getElementById('ai-top-list');
+      listEl.innerHTML = '';
+      
+      aiTopSwaps.forEach((swap, index) => {
+        const colorClass = `ai-color-${index + 1}`;
+        const hintClass = `ai-hint-${index + 1}`;
+        
+        cellElements[swap.r1][swap.c1].classList.add(hintClass);
+        cellElements[swap.r2][swap.c2].classList.add(hintClass);
+        
+        const item = document.createElement('div');
+        item.className = 'ai-top-item';
+        item.innerHTML = `<span class="${colorClass}">Pos ${index+1}: (${swap.r1},${swap.c1})</span> <b>C:${swap.cycles}</b>`;
+        listEl.appendChild(item);
+      });
     }
 
     // --- Simulación pura (sin DOM) ---
@@ -590,6 +625,39 @@
     }
 
     function inBounds(r,c){ return r>=0 && r<ROWS && c>=0 && c<COLS; }
+
+    // Versión DETERMINÍSTICA de getWeightedValue
+    function getWeightedValueSim(r, c, bd, counts) {
+        const digits = Array.from({length: 10}, (_, i) => i);
+        // Ordenamiento estable: por cuenta ascendente, luego por valor de dígito
+        digits.sort((a, b) => (counts[a] - counts[b]) || (a - b));
+
+        for (const val of digits) {
+            let isSafe = true;
+            const dirs = [[0,1], [1,0], [1,1], [1,-1]];
+            for (const [dr, dc] of dirs) {
+                const checks = [
+                    [[r + dr, c + dc], [r + 2 * dr, c + 2 * dc]],
+                    [[r - dr, c - dc], [r + dr, c + dc]],        
+                    [[r - 2 * dr, c - 2 * dc], [r - dr, c - dc]] 
+                ];
+                for (const [[r2, c2], [r3, c3]] of checks) {
+                    if (inBounds(r2,c2) && inBounds(r3,c3)) {
+                        const v2 = bd[r2][c2];
+                        const v3 = bd[r3][c3];
+                        if (v2 !== -1 && v3 !== -1) {
+                            if (val === v2 && v2 === v3) { isSafe = false; break; }
+                            if ((v2 === val + 1 && v3 === val + 2) || (v2 === val - 1 && v3 === val + 1) || (v2 === val - 2 && v3 === val - 1)) { isSafe = false; break; }
+                            if ((v2 === val - 1 && v3 === val - 2) || (v2 === val + 1 && v3 === val - 1) || (v2 === val + 2 && v3 === val + 1)) { isSafe = false; break; }
+                        }
+                    }
+                }
+                if (!isSafe) break;
+            }
+            if (isSafe) return val;
+        }
+        return digits[0]; 
+    }
 
     function findMatchesSim(bd) {
       const matched = new Set();
@@ -619,7 +687,7 @@
       return matched;
     }
 
-    function applyGravitySim(bd) {
+    function applyGravitySim(bd, counts) {
       for (let c=0;c<COLS;c++){
         let write = ROWS-1;
         for (let r=ROWS-1;r>=0;r--){
@@ -630,14 +698,18 @@
           }
         }
         for (let r=write;r>=0;r--){
-          bd[r][c] = Math.floor(Math.random()*10);
+          const val = getWeightedValueSim(r, c, bd, counts);
+          bd[r][c] = val;
+          counts[val]++;
         }
       }
     }
 
-    function simulateSwapCycles(boardSnapshot, r1,c1,r2,c2, maxCyclesCap=50) {
+    function simulateSwapCycles(boardSnapshot, countsSnapshot, r1,c1,r2,c2, maxCyclesCap=30) {
       const bd = cloneBoard(boardSnapshot);
+      const counts = {...countsSnapshot};
       const t = bd[r1][c1]; bd[r1][c1] = bd[r2][c2]; bd[r2][c2] = t;
+      
       let cycles = 0;
       for (let iter=0; iter<maxCyclesCap; iter++){
         const matches = findMatchesSim(bd);
@@ -645,9 +717,10 @@
         cycles++;
         for (const pos of matches){
           const [r,c] = pos.split(',').map(Number);
+          counts[bd[r][c]]--;
           bd[r][c] = -1;
         }
-        applyGravitySim(bd);
+        applyGravitySim(bd, counts);
       }
       return cycles;
     }
@@ -669,16 +742,16 @@
 
       aiAbort = false;
       aiRunning = true;
-      aiBest = { cycles: 0, r1: -1, c1: -1, r2: -1, c2: -1 };
+      aiTopSwaps = [];
       updateAiStatus('BUSCANDO...');
-      const bestEl = document.getElementById('aiBestCycles');
-      if (bestEl) bestEl.textContent = '0';
+      document.getElementById('ai-top-list').innerHTML = '';
 
       const snapshot = cloneBoard(board);
+      const countsSnapshot = {...cellCounts};
       const swaps = enumerateAdjacentSwaps();
 
       let idx = 0;
-      const batchSize = 15;
+      const batchSize = 10;
 
       const tick = () => {
         if (aiAbort || !aiEnabled || isProcessing || gameEnded) {
@@ -690,20 +763,25 @@
         const end = Math.min(swaps.length, idx + batchSize);
         for (; idx<end; idx++){
           const [r1,c1,r2,c2] = swaps[idx];
-          const cycles = simulateSwapCycles(snapshot, r1,c1,r2,c2);
-          // Solo sugerir si genera al menos 1 match inicial (cycles > 0)
-          if (cycles > 0 && cycles > aiBest.cycles){
-            aiBest = { cycles, r1, c1, r2, c2 };
-            if (bestEl) bestEl.textContent = String(cycles);
-            applyAiHint(r1,c1,r2,c2);
+          const cycles = simulateSwapCycles(snapshot, countsSnapshot, r1,c1,r2,c2);
+          
+          if (cycles > 0) {
+            const currentSwap = { cycles, r1, c1, r2, c2 };
+            aiTopSwaps.push(currentSwap);
+            // Ordenar por ciclos descendente y mantener solo top 3
+            aiTopSwaps.sort((a, b) => (b.cycles - a.cycles) || (a.r1 - b.r1) || (a.c1 - b.c1));
+            if (aiTopSwaps.length > 3) aiTopSwaps.pop();
+            
+            applyAiHints();
           }
         }
 
         if (idx >= swaps.length){
           aiRunning = false;
           updateAiStatus('LISTO');
-          // Si no se encontró nada válido, limpiar hint
-          if (aiBest.cycles === 0) clearAiHint();
+          if (aiTopSwaps.length === 0) {
+              document.getElementById('ai-top-list').innerHTML = '<div style="font-size:8px;color:#800000">No se hallaron matches.</div>';
+          }
           return;
         }
         setTimeout(tick, 0);
