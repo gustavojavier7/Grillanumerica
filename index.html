@@ -387,7 +387,7 @@
             const dc = Math.abs(c - selectedCell.c);
             
             if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
-                // swap confirmado: detener IA para no interferir
+                // stop_blink_on_confirm: detener IA y limpiar tablero
                 stopAiSearch();
                 clearAiHints();
                 
@@ -593,14 +593,14 @@
       aiRunning = false;
     }
 
+    // Asegura limpieza total de cualquier clase de parpadeo
     function clearAiHints() {
-      aiTopSwaps.forEach((swap, index) => {
-        cellElements[swap.r1]?.[swap.c1]?.classList.remove(`ai-hint-${index + 1}`);
-        cellElements[swap.r2]?.[swap.c2]?.classList.remove(`ai-hint-${index + 1}`);
-      });
+      const hints = document.querySelectorAll('.cell.ai-hint-1, .cell.ai-hint-2, .cell.ai-hint-3');
+      hints.forEach(el => el.classList.remove('ai-hint-1', 'ai-hint-2', 'ai-hint-3'));
     }
 
-    function applyAiHints() {
+    // blink_top_3_swaps: Aplica los parpadeos exclusivamente al top 3 actual
+    function blink_top_3_swaps() {
       clearAiHints();
       const listEl = document.getElementById('ai-top-list');
       listEl.innerHTML = '';
@@ -609,8 +609,8 @@
         const colorClass = `ai-color-${index + 1}`;
         const hintClass = `ai-hint-${index + 1}`;
         
-        cellElements[swap.r1][swap.c1].classList.add(hintClass);
-        cellElements[swap.r2][swap.c2].classList.add(hintClass);
+        if (cellElements[swap.r1]?.[swap.c1]) cellElements[swap.r1][swap.c1].classList.add(hintClass);
+        if (cellElements[swap.r2]?.[swap.c2]) cellElements[swap.r2][swap.c2].classList.add(hintClass);
         
         const item = document.createElement('div');
         item.className = 'ai-top-item';
@@ -751,7 +751,7 @@
       const swaps = enumerateAdjacentSwaps();
 
       let idx = 0;
-      const batchSize = 10;
+      const batchSize = 12; // Ajustado para rendimiento
 
       const tick = () => {
         if (aiAbort || !aiEnabled || isProcessing || gameEnded) {
@@ -772,7 +772,7 @@
             aiTopSwaps.sort((a, b) => (b.cycles - a.cycles) || (a.r1 - b.r1) || (a.c1 - b.c1));
             if (aiTopSwaps.length > 3) aiTopSwaps.pop();
             
-            applyAiHints();
+            blink_top_3_swaps();
           }
         }
 
