@@ -19,8 +19,12 @@
         }
         #main-container {
             display: flex;
-            gap: 5px;
-            align-items: center;
+            gap: 20px;
+            align-items: stretch;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            justify-content: center; /* Centrar los contenedores */
         }
         #game-container {
             display: grid;
@@ -32,13 +36,15 @@
             border-right: 2px solid #ffffff;
             border-bottom: 2px solid #ffffff;
             box-shadow: inset 1px 1px 0px #000, 1px 1px 0px #fff;
-            min-width: 200px;
-            min-height: 200px;
+            flex: 0 1 60%;
+            aspect-ratio: 1 / 1;
+            height: 100%;
+            max-height: 90vh; /* Evita que desborde verticalmente en monitores anchos */
             overflow: hidden;
         }
         .cell {
-            width: var(--cell, 25px);
-            height: var(--cell, 25px);
+            width: auto;
+            height: auto;
             background-color: #c0c0c0;
             border-top: 1px solid #ffffff;
             border-left: 1px solid #ffffff;
@@ -48,7 +54,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: var(--font, 20px);
+            font-size: 2.5vmin; /* Fuente responsiva */
             font-weight: bold;
             cursor: pointer;
             user-select: none;
@@ -74,7 +80,10 @@
             border-left: 2px solid #ffffff;
             border-right: 2px solid #404040;
             border-bottom: 2px solid #404040;
-            min-width: 180px;
+            width: 250px;
+            flex: 0 0 250px;
+            display: flex;
+            flex-direction: column;
             padding: 2px;
         }
         .window-title {
@@ -138,6 +147,28 @@
             border-top: 1px solid #808080; 
             margin-top: 5px; 
             background: #c0c0c0;
+            flex-grow: 1;
+        }
+
+        /* Responsividad tipo Grilla */
+        @media (max-width: 768px) {
+            #main-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            #game-container {
+                flex: none;
+                width: 90vw;
+                height: 90vw;
+                max-height: none;
+            }
+            #ui-container {
+                flex: none;
+                width: 90vw;
+            }
+            .cell {
+                font-size: 4vmin;
+            }
         }
     </style>
 </head>
@@ -188,84 +219,41 @@
         for (let i = 0; i <= 9; i++) cellCounts[i] = 0;
     }
 
-    function fitGridToViewport() {
-        const main = document.getElementById('main-container');
-        const grid = document.getElementById('game-container');
-        const ui = document.getElementById('ui-container');
-
-        const vh = window.innerHeight;
-        const vw = window.innerWidth;
-        const bodyStyle = getComputedStyle(document.body);
-        const padY = parseFloat(bodyStyle.paddingTop) + parseFloat(bodyStyle.paddingBottom);
-        const padX = parseFloat(bodyStyle.paddingLeft) + parseFloat(bodyStyle.paddingRight);
-        const mainStyle = getComputedStyle(main);
-        const mainGap = parseFloat(mainStyle.gap) || 0;
-        const availH = vh - padY;
-        const uiW = ui.getBoundingClientRect().width;
-        const availW = vw - padX - uiW - mainGap;
-
-        const gridStyle = getComputedStyle(grid);
-        const gridPadX = parseFloat(gridStyle.paddingLeft) + parseFloat(gridStyle.paddingRight);
-        const gridPadY = parseFloat(gridStyle.paddingTop) + parseFloat(gridStyle.paddingBottom);
-        const gridBorderX = parseFloat(gridStyle.borderLeftWidth) + parseFloat(gridStyle.borderRightWidth);
-        const gridBorderY = parseFloat(gridStyle.borderTopWidth) + parseFloat(gridStyle.borderBottomWidth);
-
-        const cellGap = 1; // Mantener constante para estabilidad
-        const cellW = Math.floor((availW - gridPadX - gridBorderX - (COLS - 1) * cellGap) / COLS);
-        const cellH = Math.floor((availH - gridPadY - gridBorderY - (ROWS - 1) * cellGap) / ROWS);
-        const cell = Math.max(12, Math.min(cellW, cellH));
-
-        grid.style.gap = `${cellGap}px`;
-        grid.style.gridTemplateColumns = `repeat(${COLS}, ${cell}px)`;
-        grid.style.gridTemplateRows = `repeat(${ROWS}, ${cell}px)`; // Asegurar altura de fila
-
-        const font = Math.max(10, Math.floor(cell * 0.6));
-        document.documentElement.style.setProperty('--cell', `${cell}px`);
-        document.documentElement.style.setProperty('--font', `${font}px`);
-        return { cell, cellGap };
-    }
-
+    /* Se reemplaza la medición manual por la lectura directa del DOM */
     function getCellMetrics() {
-        const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell')) || 25;
-        const gap = parseFloat(getComputedStyle(document.getElementById('game-container')).gap) || 1;
-        return cell + gap;
+        if (cellElements[0] && cellElements[0][0]) {
+            const rect = cellElements[0][0].getBoundingClientRect();
+            const gap = parseFloat(getComputedStyle(document.getElementById('game-container')).gap) || 1;
+            return rect.height + gap;
+        }
+        return 26; // Fallback
     }
 
     function getWeightedValue(r, c) {
-        // Ordenamos los dígitos 0-9 por su población actual (menor a mayor)
         const sortedDigits = Array.from({length: 10}, (_, i) => i).sort((a, b) => cellCounts[a] - cellCounts[b]);
 
         for (const val of sortedDigits) {
             let isSafe = true;
-            // Direcciones para chequear: dr, dc
             const dirs = [[0,1], [1,0], [1,1], [1,-1]];
             
             for (const [dr, dc] of dirs) {
-                // Chequear si colocar 'val' completa un patrón (secuencia o triple)
-                // 1) val es el primero del trío (val, r+dr, r+2dr)
-                // 2) val es el centro del trío (r-dr, val, r+dr)
-                // 3) val es el final del trío (r-2dr, r-dr, val)
                 const checks = [
-                    [[r + dr, c + dc], [r + 2 * dr, c + 2 * dc]], // Caso 1
-                    [[r - dr, c - dc], [r + dr, c + dc]],         // Caso 2
-                    [[r - 2 * dr, c - 2 * dc], [r - dr, c - dc]]  // Caso 3
+                    [[r + dr, c + dc], [r + 2 * dr, c + 2 * dc]],
+                    [[r - dr, c - dc], [r + dr, c + dc]],        
+                    [[r - 2 * dr, c - 2 * dc], [r - dr, c - dc]] 
                 ];
 
                 for (const [[r2, c2], [r3, c3]] of checks) {
                     if (r2 >= 0 && r2 < ROWS && c2 >= 0 && c2 < COLS &&
                         r3 >= 0 && r3 < ROWS && c3 >= 0 && c3 < COLS) {
                         
-                        // Verificar que las filas existan en el board (importante durante init)
                         if (board[r2] && board[r3]) {
                             const v2 = board[r2][c2];
                             const v3 = board[r3][c3];
                             
                             if (v2 !== undefined && v2 !== -1 && v3 !== undefined && v3 !== -1) {
-                                // Triple (5-5-5)
                                 if (val === v2 && v2 === v3) { isSafe = false; break; }
-                                // Secuencia ascendente (1-2-3)
                                 if ((v2 === val + 1 && v3 === val + 2) || (v2 === val - 1 && v3 === val + 1) || (v2 === val - 2 && v3 === val - 1)) { isSafe = false; break; }
-                                // Secuencia descendente (3-2-1)
                                 if ((v2 === val - 1 && v3 === val - 2) || (v2 === val + 1 && v3 === val - 1) || (v2 === val + 2 && v3 === val + 1)) { isSafe = false; break; }
                             }
                         }
@@ -275,14 +263,16 @@
             }
             if (isSafe) return val;
         }
-        return sortedDigits[0]; // Fallback al menos común si no hay nada seguro
+        return sortedDigits[0]; 
     }
 
     function init() {
         initCellCounts();
-        fitGridToViewport();
+        
         const container = document.getElementById('game-container');
+        /* Generación de grilla dinámica desde JS usando CSS Grid */
         container.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
+        container.style.gridTemplateRows = `repeat(${ROWS}, 1fr)`;
         container.innerHTML = ''; 
         
         for (let r = 0; r < ROWS; r++) {
@@ -402,7 +392,7 @@
             matchedPositions.forEach(pos => {
                 const [r, c] = pos.split(',').map(Number);
                 const val = board[r][c];
-                if (val !== -1) cellCounts[val]--; // Decrementar población
+                if (val !== -1) cellCounts[val]--; 
                 board[r][c] = -1;
                 cellElements[r][c].classList.remove('matched');
                 cellElements[r][c].textContent = '';
@@ -454,7 +444,7 @@
             for (let r = 0; r < emptySpaces; r++) {
                 const val = getWeightedValue(r, c);
                 board[r][c] = val;
-                cellCounts[val]++; // Incrementar población
+                cellCounts[val]++; 
                 updateCell(r, c);
                 
                 const delay = delayIndex * 0.02;
@@ -493,12 +483,8 @@
         location.reload();
     }
 
-    let resizeTimeout;
+    // Se elimina el EventListener de resize porque el CSS maneja la responsividad dinámicamente
     window.onload = init;
-    window.addEventListener('resize', () => {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(fitGridToViewport, 100);
-    });
 </script>
 
 </body>
