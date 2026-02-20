@@ -305,28 +305,27 @@
         return 26; // Fallback
     }
 
+    // getWeightedValue: DETERMINÍSTICA para rellenos post-cascada
     function getWeightedValue(r, c) {
-        const sortedDigits = Array.from({length: 10}, (_, i) => i).sort((a, b) => cellCounts[a] - cellCounts[b]);
+        const digits = Array.from({length: 10}, (_, i) => i);
+        // Ordenamiento estable: por cuenta ascendente, luego por valor de dígito
+        digits.sort((a, b) => (cellCounts[a] - cellCounts[b]) || (a - b));
 
-        for (const val of sortedDigits) {
+        for (const val of digits) {
             let isSafe = true;
             const dirs = [[0,1], [1,0], [1,1], [1,-1]];
-            
             for (const [dr, dc] of dirs) {
                 const checks = [
                     [[r + dr, c + dc], [r + 2 * dr, c + 2 * dc]],
                     [[r - dr, c - dc], [r + dr, c + dc]],        
                     [[r - 2 * dr, c - 2 * dc], [r - dr, c - dc]] 
                 ];
-
                 for (const [[r2, c2], [r3, c3]] of checks) {
                     if (r2 >= 0 && r2 < ROWS && c2 >= 0 && c2 < COLS &&
                         r3 >= 0 && r3 < ROWS && c3 >= 0 && c3 < COLS) {
-                        
                         if (board[r2] && board[r3]) {
                             const v2 = board[r2][c2];
                             const v3 = board[r3][c3];
-                            
                             if (v2 !== undefined && v2 !== -1 && v3 !== undefined && v3 !== -1) {
                                 if (val === v2 && v2 === v3) { isSafe = false; break; }
                                 if ((v2 === val + 1 && v3 === val + 2) || (v2 === val - 1 && v3 === val + 1) || (v2 === val - 2 && v3 === val - 1)) { isSafe = false; break; }
@@ -339,7 +338,46 @@
             }
             if (isSafe) return val;
         }
-        return sortedDigits[0]; 
+        return digits[0]; 
+    }
+
+    // getRandomWeightedValue: AL AZAR para el inicio del juego
+    function getRandomWeightedValue(r, c) {
+        const digits = Array.from({length: 10}, (_, i) => i);
+        // Mezclar dígitos para aleatoriedad
+        for (let i = digits.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [digits[i], digits[j]] = [digits[j], digits[i]];
+        }
+
+        for (const val of digits) {
+            let isSafe = true;
+            const dirs = [[0,1], [1,0], [1,1], [1,-1]];
+            for (const [dr, dc] of dirs) {
+                const checks = [
+                    [[r + dr, c + dc], [r + 2 * dr, c + 2 * dc]],
+                    [[r - dr, c - dc], [r + dr, c + dc]],        
+                    [[r - 2 * dr, c - 2 * dc], [r - dr, c - dc]] 
+                ];
+                for (const [[r2, c2], [r3, c3]] of checks) {
+                    if (r2 >= 0 && r2 < ROWS && c2 >= 0 && c2 < COLS &&
+                        r3 >= 0 && r3 < ROWS && c3 >= 0 && c3 < COLS) {
+                        if (board[r2] && board[r3]) {
+                            const v2 = board[r2][c2];
+                            const v3 = board[r3][c3];
+                            if (v2 !== undefined && v2 !== -1 && v3 !== undefined && v3 !== -1) {
+                                if (val === v2 && v2 === v3) { isSafe = false; break; }
+                                if ((v2 === val + 1 && v3 === val + 2) || (v2 === val - 1 && v3 === val + 1) || (v2 === val - 2 && v3 === val - 1)) { isSafe = false; break; }
+                                if ((v2 === val - 1 && v3 === val - 2) || (v2 === val + 1 && v3 === val - 1) || (v2 === val + 2 && v3 === val + 1)) { isSafe = false; break; }
+                            }
+                        }
+                    }
+                }
+                if (!isSafe) break;
+            }
+            if (isSafe) return val;
+        }
+        return Math.floor(Math.random() * 10);
     }
 
     function init() {
@@ -355,7 +393,8 @@
             board[r] = [];
             cellElements[r] = [];
             for (let c = 0; c < COLS; c++) {
-                const val = getWeightedValue(r, c);
+                // PRIMER LLENADO: AL AZAR
+                const val = getRandomWeightedValue(r, c);
                 board[r][c] = val;
                 cellCounts[val]++;
                 
@@ -526,6 +565,7 @@
             }
 
             for (let r = 0; r < emptySpaces; r++) {
+                // A PARTIR DE AQUÍ (RELLENO POST-CASCADA): DETERMINÍSTICO
                 const val = getWeightedValue(r, c);
                 board[r][c] = val;
                 cellCounts[val]++; 
@@ -626,10 +666,10 @@
 
     function inBounds(r,c){ return r>=0 && r<ROWS && c>=0 && c<COLS; }
 
-    // Versión DETERMINÍSTICA de getWeightedValue
+    // Versión DETERMINÍSTICA de getWeightedValue para la SIMULACIÓN de la IA
     function getWeightedValueSim(r, c, bd, counts) {
         const digits = Array.from({length: 10}, (_, i) => i);
-        // Ordenamiento estable: por cuenta ascendente, luego por valor de dígito
+        // Ordenamiento estable idéntico al juego real
         digits.sort((a, b) => (counts[a] - counts[b]) || (a - b));
 
         for (const val of digits) {
