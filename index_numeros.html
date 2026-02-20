@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grilla Numérica - Secuencias</title>
+    <style>
+        body {
+            font-family: Tahoma, "MS Sans Serif", Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #008080; /* Clásico verde azulado de fondo de escritorio */
+            color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden; /* Evitar scroll accidental */
+        }
+        #main-container {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        #game-container {
+            display: grid;
+            gap: 1px;
+            background-color: #c0c0c0;
+            padding: 2px;
+            border-top: 2px solid #808080;
+            border-left: 2px solid #808080;
+            border-right: 2px solid #ffffff;
+            border-bottom: 2px solid #ffffff;
+            box-shadow: inset 1px 1px 0px #000, 1px 1px 0px #fff;
+            min-width: 200px;
+            min-height: 200px;
+            overflow: hidden;
+        }
+        .cell {
+            width: var(--cell, 25px);
+            height: var(--cell, 25px);
+            background-color: #c0c0c0;
+            border-top: 1px solid #ffffff;
+            border-left: 1px solid #ffffff;
+            border-right: 1px solid #808080;
+            border-bottom: 1px solid #808080;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: var(--font, 20px);
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            color: #000;
+            text-shadow: 1px 1px 0px #ffffff;
+        }
+        .cell.selected {
+            background-color: #000080; /* Azul selección Windows */
+            color: #ffffff;
+            text-shadow: none;
+            border: 1px solid #000;
+        }
+        .cell.matched {
+            background-color: #808080;
+            color: #ff0000;
+            text-shadow: 1px 1px 0px #000;
+            border: 1px solid #000;
+        }
+        
+        #ui-container {
+            background-color: #c0c0c0;
+            border-top: 2px solid #ffffff;
+            border-left: 2px solid #ffffff;
+            border-right: 2px solid #404040;
+            border-bottom: 2px solid #404040;
+            min-width: 180px;
+            padding: 2px;
+        }
+        .window-title {
+            background: linear-gradient(90deg, #000080, #1084d0);
+            color: white;
+            padding: 2px 4px;
+            font-size: 11px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .stat-box {
+            margin: 5px 10px;
+            padding: 3px;
+            background: #fff;
+            border-top: 1px solid #808080;
+            border-left: 1px solid #808080;
+            border-right: 1px solid #ffffff;
+            border-bottom: 1px solid #ffffff;
+            text-align: right;
+        }
+        .stat-label { 
+            font-size: 10px; 
+            color: #000; 
+            text-align: left;
+            margin-left: 10px;
+            margin-top: 2px;
+        }
+        .stat-value { 
+            font-family: 'Courier New', monospace;
+            font-size: 16px; 
+            font-weight: bold; 
+            color: #000; 
+        }
+        
+        button {
+            margin: 5px;
+            padding: 3px 10px;
+            background: #c0c0c0;
+            color: black;
+            border-top: 2px solid #ffffff;
+            border-left: 2px solid #ffffff;
+            border-right: 2px solid #404040;
+            border-bottom: 2px solid #404040;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        button:active {
+            border-top: 2px solid #404040;
+            border-left: 2px solid #404040;
+            border-right: 2px solid #ffffff;
+            border-bottom: 2px solid #ffffff;
+            padding: 4px 9px 2px 11px;
+        }
+        
+        #instructions {
+            font-size: 10px; 
+            padding: 5px; 
+            border-top: 1px solid #808080; 
+            margin-top: 5px; 
+            background: #c0c0c0;
+        }
+    </style>
+</head>
+<body>
+
+<div id="main-container">
+    <div id="game-container"></div>
+    
+    <div id="ui-container">
+        <div class="window-title">
+            <span>Estadísticas de Juego</span>
+            <div style="background:#c0c0c0; color:black; width:14px; height:12px; line-height:10px; text-align:center; border:1px solid #000; font-size:10px;">X</div>
+        </div>
+        <div class="stat-label">PUNTAJE ACUMULADO</div>
+        <div class="stat-box">
+            <div id="score" class="stat-value">00000000</div>
+        </div>
+        <div class="stat-label">TIEMPO RESTANTE</div>
+        <div class="stat-box">
+            <div id="timer" class="stat-value">01:00</div>
+        </div>
+        <div class="stat-label">MULTIPLICADOR</div>
+        <div class="stat-box">
+            <div id="combo" class="stat-value">x1</div>
+        </div>
+        <div style="text-align: center;">
+            <button onclick="resetGame()">Reiniciar</button>
+        </div>
+        <div id="instructions">
+            <b>Instrucciones:</b> Forme líneas de 3 en secuencia o iguales.
+        </div>
+    </div>
+</div>
+
+<script>
+    const ROWS = 20;
+    const COLS = 20;
+    let board = [];
+    let cellElements = [];
+    let selectedCell = null;
+    let score = 0;
+    let timeLeft = 60;
+    let isProcessing = false;
+    let combo = 1;
+    let cellCounts = {};
+
+    function initCellCounts() {
+        for (let i = 0; i <= 9; i++) cellCounts[i] = 0;
+    }
+
+    function fitGridToViewport() {
+        const main = document.getElementById('main-container');
+        const grid = document.getElementById('game-container');
+        const ui = document.getElementById('ui-container');
+
+        const vh = window.innerHeight;
+        const vw = window.innerWidth;
+        const bodyStyle = getComputedStyle(document.body);
+        const padY = parseFloat(bodyStyle.paddingTop) + parseFloat(bodyStyle.paddingBottom);
+        const padX = parseFloat(bodyStyle.paddingLeft) + parseFloat(bodyStyle.paddingRight);
+        const mainStyle = getComputedStyle(main);
+        const mainGap = parseFloat(mainStyle.gap) || 0;
+        const availH = vh - padY;
+        const uiW = ui.getBoundingClientRect().width;
+        const availW = vw - padX - uiW - mainGap;
+
+        const gridStyle = getComputedStyle(grid);
+        const gridPadX = parseFloat(gridStyle.paddingLeft) + parseFloat(gridStyle.paddingRight);
+        const gridPadY = parseFloat(gridStyle.paddingTop) + parseFloat(gridStyle.paddingBottom);
+        const gridBorderX = parseFloat(gridStyle.borderLeftWidth) + parseFloat(gridStyle.borderRightWidth);
+        const gridBorderY = parseFloat(gridStyle.borderTopWidth) + parseFloat(gridStyle.borderBottomWidth);
+
+        const cellGap = 1; // Mantener constante para estabilidad
+        const cellW = Math.floor((availW - gridPadX - gridBorderX - (COLS - 1) * cellGap) / COLS);
+        const cellH = Math.floor((availH - gridPadY - gridBorderY - (ROWS - 1) * cellGap) / ROWS);
+        const cell = Math.max(12, Math.min(cellW, cellH));
+
+        grid.style.gap = `${cellGap}px`;
+        grid.style.gridTemplateColumns = `repeat(${COLS}, ${cell}px)`;
+        grid.style.gridTemplateRows = `repeat(${ROWS}, ${cell}px)`; // Asegurar altura de fila
+
+        const font = Math.max(10, Math.floor(cell * 0.6));
+        document.documentElement.style.setProperty('--cell', `${cell}px`);
+        document.documentElement.style.setProperty('--font', `${font}px`);
+        return { cell, cellGap };
+    }
+
+    function getCellMetrics() {
+        const cell = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell')) || 25;
+        const gap = parseFloat(getComputedStyle(document.getElementById('game-container')).gap) || 1;
+        return cell + gap;
+    }
+
+    function getWeightedValue(r, c) {
+        // Ordenamos los dígitos 0-9 por su población actual (menor a mayor)
+        const sortedDigits = Array.from({length: 10}, (_, i) => i).sort((a, b) => cellCounts[a] - cellCounts[b]);
+
+        for (const val of sortedDigits) {
+            let isSafe = true;
+            // Direcciones para chequear: dr, dc
+            const dirs = [[0,1], [1,0], [1,1], [1,-1]];
+            
+            for (const [dr, dc] of dirs) {
+                // Chequear si colocar 'val' completa un patrón (secuencia o triple)
+                // 1) val es el primero del trío (val, r+dr, r+2dr)
+                // 2) val es el centro del trío (r-dr, val, r+dr)
+                // 3) val es el final del trío (r-2dr, r-dr, val)
+                const checks = [
+                    [[r + dr, c + dc], [r + 2 * dr, c + 2 * dc]], // Caso 1
+                    [[r - dr, c - dc], [r + dr, c + dc]],         // Caso 2
+                    [[r - 2 * dr, c - 2 * dc], [r - dr, c - dc]]  // Caso 3
+                ];
+
+                for (const [[r2, c2], [r3, c3]] of checks) {
+                    if (r2 >= 0 && r2 < ROWS && c2 >= 0 && c2 < COLS &&
+                        r3 >= 0 && r3 < ROWS && c3 >= 0 && c3 < COLS) {
+                        
+                        // Verificar que las filas existan en el board (importante durante init)
+                        if (board[r2] && board[r3]) {
+                            const v2 = board[r2][c2];
+                            const v3 = board[r3][c3];
+                            
+                            if (v2 !== undefined && v2 !== -1 && v3 !== undefined && v3 !== -1) {
+                                // Triple (5-5-5)
+                                if (val === v2 && v2 === v3) { isSafe = false; break; }
+                                // Secuencia ascendente (1-2-3)
+                                if ((v2 === val + 1 && v3 === val + 2) || (v2 === val - 1 && v3 === val + 1) || (v2 === val - 2 && v3 === val - 1)) { isSafe = false; break; }
+                                // Secuencia descendente (3-2-1)
+                                if ((v2 === val - 1 && v3 === val - 2) || (v2 === val + 1 && v3 === val - 1) || (v2 === val + 2 && v3 === val + 1)) { isSafe = false; break; }
+                            }
+                        }
+                    }
+                }
+                if (!isSafe) break;
+            }
+            if (isSafe) return val;
+        }
+        return sortedDigits[0]; // Fallback al menos común si no hay nada seguro
+    }
+
+    function init() {
+        initCellCounts();
+        fitGridToViewport();
+        const container = document.getElementById('game-container');
+        container.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
+        container.innerHTML = ''; 
+        
+        for (let r = 0; r < ROWS; r++) {
+            board[r] = [];
+            cellElements[r] = [];
+            for (let c = 0; c < COLS; c++) {
+                const val = getWeightedValue(r, c);
+                board[r][c] = val;
+                cellCounts[val]++;
+                
+                const div = document.createElement('div');
+                div.className = `cell n${val}`;
+                div.textContent = val;
+                div.onclick = () => handleCellClick(r, c);
+                container.appendChild(div);
+                cellElements[r][c] = div;
+            }
+        }
+        startTimer();
+        checkAndRemoveMatches();
+    }
+
+    function handleCellClick(r, c) {
+        if (isProcessing) return;
+        
+        if (!selectedCell) {
+            selectedCell = {r, c};
+            cellElements[r][c].classList.add('selected');
+        } else {
+            const dr = Math.abs(r - selectedCell.r);
+            const dc = Math.abs(c - selectedCell.c);
+            
+            if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
+                swap(selectedCell.r, selectedCell.c, r, c);
+                checkAndRemoveMatches(true);
+            }
+            
+            cellElements[selectedCell.r][selectedCell.c].classList.remove('selected');
+            selectedCell = null;
+        }
+    }
+
+    function swap(r1, c1, r2, c2) {
+        const temp = board[r1][c1];
+        board[r1][c1] = board[r2][c2];
+        board[r2][c2] = temp;
+        updateCell(r1, c1);
+        updateCell(r2, c2);
+    }
+
+    function updateCell(r, c) {
+        const val = board[r][c];
+        cellElements[r][c].className = `cell n${val}`;
+        cellElements[r][c].textContent = val;
+    }
+
+    function addFallAnimation(cell, delay = 0, initialOffset = 0, isNewCell = false) {
+        cell.style.transition = 'none';
+        cell.style.transform = `translateY(${initialOffset}px)`;
+        if (isNewCell) cell.style.opacity = '0';
+        void cell.offsetWidth; 
+
+        cell.style.transition = `transform 0.2s cubic-bezier(0.42, 0, 1.0, 1.0) ${delay}s, opacity 0.2s linear ${delay}s`;
+        cell.style.transform = 'translateY(0)';
+        if (isNewCell) cell.style.opacity = '1';
+
+        const transitionEndHandler = () => {
+            cell.style.transition = '';
+            cell.style.transform = '';
+            cell.style.opacity = '';
+            cell.removeEventListener('transitionend', transitionEndHandler);
+        };
+        cell.addEventListener('transitionend', transitionEndHandler);
+    }
+
+    async function checkAndRemoveMatches(isManualMove = false) {
+        isProcessing = true;
+        let matchedPositions = new Set();
+        const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                directions.forEach(([dr, dc]) => {
+                    const r2 = r + dr, c2 = c + dc;
+                    const r3 = r + 2 * dr, c3 = c + 2 * dc;
+
+                    if (r3 >= 0 && r3 < ROWS && c3 >= 0 && c3 < COLS) {
+                        const v1 = board[r][c];
+                        const v2 = board[r2][c2];
+                        const v3 = board[r3][c3];
+
+                        if ((v2 === v1 + 1 && v3 === v2 + 1) || (v2 === v1 - 1 && v3 === v2 - 1) || (v1 === v2 && v2 === v3)) {
+                            matchedPositions.add(`${r},${c}`);
+                            matchedPositions.add(`${r2},${c2}`);
+                            matchedPositions.add(`${r3},${c3}`);
+                        }
+                    }
+                });
+            }
+        }
+
+        if (matchedPositions.size > 0) {
+            matchedPositions.forEach(pos => {
+                const [r, c] = pos.split(',').map(Number);
+                cellElements[r][c].classList.add('matched');
+            });
+
+            await new Promise(res => setTimeout(res, 600));
+
+            score += matchedPositions.size * 10 * combo;
+            document.getElementById('score').textContent = score.toString().padStart(8, '0');
+            
+            if (isManualMove) {
+                timeLeft += Math.floor(matchedPositions.size / 2);
+            }
+
+            matchedPositions.forEach(pos => {
+                const [r, c] = pos.split(',').map(Number);
+                const val = board[r][c];
+                if (val !== -1) cellCounts[val]--; // Decrementar población
+                board[r][c] = -1;
+                cellElements[r][c].classList.remove('matched');
+                cellElements[r][c].textContent = '';
+                cellElements[r][c].className = 'cell';
+            });
+
+            await applyGravity();
+            combo++;
+            document.getElementById('combo').textContent = `x${combo}`;
+            
+            setTimeout(() => checkAndRemoveMatches(), 300);
+        } else {
+            isProcessing = false;
+            combo = 1;
+            document.getElementById('combo').textContent = `x1`;
+        }
+    }
+
+    async function applyGravity() {
+        let maxDelay = 0;
+        const CELL_SIZE_REAL = getCellMetrics();
+
+        for (let c = 0; c < COLS; c++) {
+            let emptySpaces = 0;
+            let delayIndex = 0;
+
+            for (let r = ROWS - 1; r >= 0; r--) {
+                if (board[r][c] === -1) {
+                    emptySpaces++;
+                } else if (emptySpaces > 0) {
+                    const oldR = r;
+                    const newR = r + emptySpaces;
+                    const val = board[oldR][c];
+
+                    board[newR][c] = val;
+                    board[oldR][c] = -1;
+
+                    updateCell(newR, c);
+                    cellElements[oldR][c].textContent = '';
+                    cellElements[oldR][c].className = 'cell';
+
+                    const delay = delayIndex * 0.02;
+                    addFallAnimation(cellElements[newR][c], delay, -emptySpaces * CELL_SIZE_REAL, false);
+                    maxDelay = Math.max(maxDelay, delay);
+                    delayIndex++;
+                }
+            }
+
+            for (let r = 0; r < emptySpaces; r++) {
+                const val = getWeightedValue(r, c);
+                board[r][c] = val;
+                cellCounts[val]++; // Incrementar población
+                updateCell(r, c);
+                
+                const delay = delayIndex * 0.02;
+                addFallAnimation(cellElements[r][c], delay, -emptySpaces * CELL_SIZE_REAL, true);
+                maxDelay = Math.max(maxDelay, delay);
+                delayIndex++;
+            }
+        }
+        await new Promise(res => setTimeout(res, (maxDelay + 0.2) * 1000));
+    }
+
+    function renderAll() {
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                updateCell(r, c);
+                cellElements[r][c].classList.remove('matched');
+            }
+        }
+    }
+
+    function startTimer() {
+        const interval = setInterval(() => {
+            if (timeLeft <= 0) {
+                clearInterval(interval);
+                alert("Fin del tiempo! Puntaje final: " + score);
+                return;
+            }
+            timeLeft--;
+            const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+            const secs = (timeLeft % 60).toString().padStart(2, '0');
+            document.getElementById('timer').textContent = `${mins}:${secs}`;
+        }, 1000);
+    }
+
+    function resetGame() {
+        location.reload();
+    }
+
+    let resizeTimeout;
+    window.onload = init;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(fitGridToViewport, 100);
+    });
+</script>
+
+</body>
+</html>
