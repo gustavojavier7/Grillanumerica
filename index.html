@@ -141,6 +141,19 @@
             padding: 4px 9px 2px 11px;
         }
         
+       .pop-item {
+            font-size: 11px;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2px;
+            color: #000;
+        }
+        .pop-digit {
+            font-weight: bold;
+            color: #000080;
+        }
+        
         #instructions {
             font-size: 10px; 
             padding: 5px; 
@@ -194,6 +207,9 @@
         <div class="stat-box">
             <div id="combo" class="stat-value">x1</div>
         </div>
+        <div class="stat-label">POBLACIÓN</div>
+        <div class="stat-box" id="population-list" style="text-align: left; padding: 4px;">
+            </div>
         <div style="text-align: center;">
             <button onclick="resetGame()">Reiniciar</button>
         </div>
@@ -214,6 +230,23 @@
     let isProcessing = false;
     let combo = 1;
     let cellCounts = {};
+
+    function updatePopulationList() {
+        const container = document.getElementById('population-list');
+        if (!container) return;
+        container.innerHTML = '';
+        const totalCells = ROWS * COLS;
+        
+        for (let i = 0; i <= 9; i++) {
+            const count = cellCounts[i] || 0;
+            const percentage = ((count / totalCells) * 100).toFixed(1);
+            
+            const div = document.createElement('div');
+            div.className = 'pop-item';
+            div.innerHTML = `<span class="pop-digit">Nº ${i}:</span> <span>${count} (${percentage}%)</span>`;
+            container.appendChild(div);
+        }
+    }
 
     function initCellCounts() {
         for (let i = 0; i <= 9; i++) cellCounts[i] = 0;
@@ -408,6 +441,7 @@
             isProcessing = false;
             combo = 1;
             document.getElementById('combo').textContent = `x1`;
+            updatePopulationList();
         }
     }
 
@@ -489,3 +523,4 @@
 
 </body>
 </html>
+
