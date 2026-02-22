@@ -74,24 +74,26 @@
             border: 1px solid #000;
         }
 
-        @keyframes aiHintPulse1 {
-          0%   { outline: 0px solid transparent; filter: brightness(1); }
-          50%  { outline: 3px solid #0000FF; filter: brightness(1.3); }
-          100% { outline: 0px solid transparent; filter: brightness(1); }
+        :root {
+            --ai-delay-1: 0s;
+            --ai-delay-2: 0.333s;
+            --ai-delay-3: 0.666s;
         }
-        @keyframes aiHintPulse2 {
-          0%   { outline: 0px solid transparent; filter: brightness(1); }
-          50%  { outline: 3px solid #FF00FF; filter: brightness(1.3); }
-          100% { outline: 0px solid transparent; filter: brightness(1); }
+
+        @keyframes aiPulseMaster {
+            0% { outline: 0px solid transparent; filter: brightness(1) saturate(1); }
+            50% { outline: 4px solid var(--ai-color); filter: brightness(1.6) saturate(1.8); }
+            100% { outline: 0px solid transparent; filter: brightness(1) saturate(1); }
         }
-        @keyframes aiHintPulse3 {
-          0%   { outline: 0px solid transparent; filter: brightness(1); }
-          50%  { outline: 3px solid #00FFFF; filter: brightness(1.3); }
-          100% { outline: 0px solid transparent; filter: brightness(1); }
+
+        .cell.ai-hint {
+            animation: aiPulseMaster 1s ease-in-out infinite;
+            will-change: outline, filter;
+            z-index: 10;
         }
-        .cell.ai-hint-1 { animation: aiHintPulse1 1s ease-in-out infinite; z-index: 10; }
-        .cell.ai-hint-2 { animation: aiHintPulse2 1s ease-in-out infinite 0.2s; z-index: 9; }
-        .cell.ai-hint-3 { animation: aiHintPulse3 1s ease-in-out infinite 0.4s; z-index: 8; }
+        .cell.ai-hint.rank-1 { --ai-color: #0000FF; animation-delay: var(--ai-delay-1); }
+        .cell.ai-hint.rank-2 { --ai-color: #FF00FF; animation-delay: var(--ai-delay-2); }
+        .cell.ai-hint.rank-3 { --ai-color: #00FFFF; animation-delay: var(--ai-delay-3); }
         
         #ui-container {
             background-color: #c0c0c0;
@@ -635,8 +637,8 @@
 
     // Asegura limpieza total de cualquier clase de parpadeo
     function clearAiHints() {
-      const hints = document.querySelectorAll('.cell.ai-hint-1, .cell.ai-hint-2, .cell.ai-hint-3');
-      hints.forEach(el => el.classList.remove('ai-hint-1', 'ai-hint-2', 'ai-hint-3'));
+      const hints = document.querySelectorAll('.cell.ai-hint');
+      hints.forEach(el => el.classList.remove('ai-hint', 'rank-1', 'rank-2', 'rank-3'));
     }
 
     // blink_top_3_swaps: Aplica los parpadeos exclusivamente al top 3 actual
@@ -646,15 +648,16 @@
       listEl.innerHTML = '';
       
       aiTopSwaps.forEach((swap, index) => {
-        const colorClass = `ai-color-${index + 1}`;
-        const hintClass = `ai-hint-${index + 1}`;
+        const rank = index + 1;
+        const colorClass = `ai-color-${rank}`;
+        const hintClasses = ['ai-hint', `rank-${rank}`];
         
-        if (cellElements[swap.r1]?.[swap.c1]) cellElements[swap.r1][swap.c1].classList.add(hintClass);
-        if (cellElements[swap.r2]?.[swap.c2]) cellElements[swap.r2][swap.c2].classList.add(hintClass);
+        if (cellElements[swap.r1]?.[swap.c1]) cellElements[swap.r1][swap.c1].classList.add(...hintClasses);
+        if (cellElements[swap.r2]?.[swap.c2]) cellElements[swap.r2][swap.c2].classList.add(...hintClasses);
         
         const item = document.createElement('div');
         item.className = 'ai-top-item';
-        item.innerHTML = `<span class="${colorClass}">Pos ${index+1}: (${swap.r1},${swap.c1})</span> <b>C:${swap.cycles}</b>`;
+        item.innerHTML = `<span class="${colorClass}">Pos ${rank}: (${swap.r1},${swap.c1})</span> <b>C:${swap.cycles}</b>`;
         listEl.appendChild(item);
       });
     }
