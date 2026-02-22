@@ -605,12 +605,15 @@
     }
 
     // =======================
-    // IA-ASSIST (mejor cascada)
+    // CONFIGURACIÓN IA (OPTIMIZADA)
     // =======================
+    const MAX_SIMULATION_DEPTH = 50;   // ← PROFUNDIDAD NUEVA (antes 30)
+    const AI_BATCH_SIZE = 14;          // Aumentado para mejor fluidez
+
     let aiEnabled = false;
     let aiRunning = false;
     let aiAbort = false;
-    let aiTopSwaps = []; // Almacena hasta 3 mejores swaps
+    let aiTopSwaps = [];
     let gameEnded = false;
 
     function updateAiStatus(text) {
@@ -619,73 +622,68 @@
     }
 
     function setAiEnabled(v) {
-      aiEnabled = v;
-      if (!aiEnabled) {
-        stopAiSearch();
-        clearAiHints();
-        updateAiStatus('INACTIVA');
-        document.getElementById('ai-top-list').innerHTML = '';
-      } else {
-        if (!isProcessing) startAiSearch();
-      }
+        aiEnabled = v;
+        if (!aiEnabled) {
+            stopAiSearch();
+            clearAiHints();
+            updateAiStatus('INACTIVA');
+            document.getElementById('ai-top-list').innerHTML = '';
+        } else {
+            if (!isProcessing) startAiSearch();
+        }
     }
 
     function stopAiSearch() {
-      aiAbort = true;
-      aiRunning = false;
+        aiAbort = true;
+        aiRunning = false;
     }
 
-    // Asegura limpieza total de cualquier clase de parpadeo
     function clearAiHints() {
-      const hints = document.querySelectorAll('.cell.ai-hint');
-      hints.forEach(el => el.classList.remove('ai-hint', 'rank-1', 'rank-2', 'rank-3'));
+        const hints = document.querySelectorAll('.cell.ai-hint');
+        hints.forEach(el => el.classList.remove('ai-hint', 'rank-1', 'rank-2', 'rank-3'));
     }
 
-    // blink_top_3_swaps: Aplica los parpadeos exclusivamente al top 3 actual
     function blink_top_3_swaps() {
-      clearAiHints();
-      const listEl = document.getElementById('ai-top-list');
-      listEl.innerHTML = '';
-      
-      aiTopSwaps.forEach((swap, index) => {
-        const rank = index + 1;
-        const colorClass = `ai-color-${rank}`;
-        const hintClasses = ['ai-hint', `rank-${rank}`];
-        
-        if (cellElements[swap.r1]?.[swap.c1]) cellElements[swap.r1][swap.c1].classList.add(...hintClasses);
-        if (cellElements[swap.r2]?.[swap.c2]) cellElements[swap.r2][swap.c2].classList.add(...hintClasses);
-        
-        const item = document.createElement('div');
-        item.className = 'ai-top-item';
-        item.innerHTML = `<span class="${colorClass}">Pos ${rank}: (${swap.r1},${swap.c1})</span> <b>C:${swap.cycles}</b>`;
-        listEl.appendChild(item);
-      });
+        clearAiHints();
+        const listEl = document.getElementById('ai-top-list');
+        listEl.innerHTML = '';
+       
+        aiTopSwaps.forEach((swap, index) => {
+            const rank = index + 1;
+            const colorClass = `ai-color-${rank}`;
+            const hintClasses = ['ai-hint', `rank-${rank}`];
+           
+            if (cellElements[swap.r1]?.[swap.c1]) cellElements[swap.r1][swap.c1].classList.add(...hintClasses);
+            if (cellElements[swap.r2]?.[swap.c2]) cellElements[swap.r2][swap.c2].classList.add(...hintClasses);
+           
+            const item = document.createElement('div');
+            item.className = 'ai-top-item';
+            item.innerHTML = `<span class="${colorClass}">Pos ${rank}: (${swap.r1},${swap.c1})</span> <b>C:${swap.cycles}</b>`;
+            listEl.appendChild(item);
+        });
     }
 
-    // --- Simulación pura (sin DOM) ---
     function cloneBoard(src) {
-      return src.map(row => row.slice());
+        return src.map(row => row.slice());
     }
 
-    function inBounds(r,c){ return r>=0 && r<ROWS && c>=0 && c<COLS; }
+    function inBounds(r, c) { return r >= 0 && r < ROWS && c >= 0 && c < COLS; }
 
-    // Versión DETERMINÍSTICA de getWeightedValue para la SIMULACIÓN de la IA
     function getWeightedValueSim(r, c, bd, counts) {
         const digits = Array.from({length: 10}, (_, i) => i);
-        // Ordenamiento estable idéntico al juego real
         digits.sort((a, b) => (counts[a] - counts[b]) || (a - b));
 
         for (const val of digits) {
             let isSafe = true;
-            const dirs = [[0,1], [1,0], [1,1], [1,-1]];
+            const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
             for (const [dr, dc] of dirs) {
                 const checks = [
                     [[r + dr, c + dc], [r + 2 * dr, c + 2 * dc]],
-                    [[r - dr, c - dc], [r + dr, c + dc]],        
-                    [[r - 2 * dr, c - 2 * dc], [r - dr, c - dc]] 
+                    [[r - dr, c - dc], [r + dr, c + dc]],
+                    [[r - 2 * dr, c - 2 * dc], [r - dr, c - dc]]
                 ];
                 for (const [[r2, c2], [r3, c3]] of checks) {
-                    if (inBounds(r2,c2) && inBounds(r3,c3)) {
+                    if (inBounds(r2, c2) && inBounds(r3, c3)) {
                         const v2 = bd[r2][c2];
                         const v3 = bd[r3][c3];
                         if (v2 !== -1 && v3 !== -1) {
@@ -699,138 +697,141 @@
             }
             if (isSafe) return val;
         }
-        return digits[0]; 
+        return digits[0];
     }
 
     function findMatchesSim(bd) {
-      const matched = new Set();
-      const dirs = [[0,1],[1,0],[1,1],[1,-1]];
-      for (let r=0;r<ROWS;r++){
-        for (let c=0;c<COLS;c++){
-          const v1 = bd[r][c];
-          if (v1 === -1) continue;
-          for (const [dr,dc] of dirs){
-            const r2=r+dr, c2=c+dc, r3=r+2*dr, c3=c+2*dc;
-            if (!inBounds(r3,c3)) continue;
-            const v2=bd[r2][c2], v3=bd[r3][c3];
-            if (v2===-1 || v3===-1) continue;
+        const matched = new Set();
+        const dirs = [[0, 1], [1, 0], [1, 1], [1, -1]];
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const v1 = bd[r][c];
+                if (v1 === -1) continue;
+                for (const [dr, dc] of dirs) {
+                    const r2 = r + dr, c2 = c + dc, r3 = r + 2 * dr, c3 = c + 2 * dc;
+                    if (!inBounds(r3, c3)) continue;
+                    const v2 = bd[r2][c2], v3 = bd[r3][c3];
+                    if (v2 === -1 || v3 === -1) continue;
 
-            const seqUp   = (v2 === v1 + 1 && v3 === v2 + 1);
-            const seqDown = (v2 === v1 - 1 && v3 === v2 - 1);
-            const equal3  = (v1 === v2 && v2 === v3);
+                    const seqUp = (v2 === v1 + 1 && v3 === v2 + 1);
+                    const seqDown = (v2 === v1 - 1 && v3 === v2 - 1);
+                    const equal3 = (v1 === v2 && v2 === v3);
 
-            if (seqUp || seqDown || equal3){
-              matched.add(`${r},${c}`);
-              matched.add(`${r2},${c2}`);
-              matched.add(`${r3},${c3}`);
+                    if (seqUp || seqDown || equal3) {
+                        matched.add(`${r},${c}`);
+                        matched.add(`${r2},${c2}`);
+                        matched.add(`${r3},${c3}`);
+                    }
+                }
             }
-          }
         }
-      }
-      return matched;
+        return matched;
     }
 
     function applyGravitySim(bd, counts) {
-      for (let c=0;c<COLS;c++){
-        let write = ROWS-1;
-        for (let r=ROWS-1;r>=0;r--){
-          if (bd[r][c] !== -1){
-            bd[write][c] = bd[r][c];
-            if (write !== r) bd[r][c] = -1;
-            write--;
-          }
+        for (let c = 0; c < COLS; c++) {
+            let write = ROWS - 1;
+            for (let r = ROWS - 1; r >= 0; r--) {
+                if (bd[r][c] !== -1) {
+                    bd[write][c] = bd[r][c];
+                    if (write !== r) bd[r][c] = -1;
+                    write--;
+                }
+            }
+            for (let r = write; r >= 0; r--) {
+                const val = getWeightedValueSim(r, c, bd, counts);
+                bd[r][c] = val;
+                counts[val]++;
+            }
         }
-        for (let r=write;r>=0;r--){
-          const val = getWeightedValueSim(r, c, bd, counts);
-          bd[r][c] = val;
-          counts[val]++;
-        }
-      }
     }
 
-    function simulateSwapCycles(boardSnapshot, countsSnapshot, r1,c1,r2,c2, maxCyclesCap=30) {
-      const bd = cloneBoard(boardSnapshot);
-      const counts = {...countsSnapshot};
-      const t = bd[r1][c1]; bd[r1][c1] = bd[r2][c2]; bd[r2][c2] = t;
-      
-      let cycles = 0;
-      for (let iter=0; iter<maxCyclesCap; iter++){
-        const matches = findMatchesSim(bd);
-        if (matches.size === 0) break;
-        cycles++;
-        for (const pos of matches){
-          const [r,c] = pos.split(',').map(Number);
-          counts[bd[r][c]]--;
-          bd[r][c] = -1;
+    // --- Simulación pura (optimizada a 50 ciclos) ---
+    function simulateSwapCycles(boardSnapshot, countsSnapshot, r1, c1, r2, c2) {
+        const bd = cloneBoard(boardSnapshot);
+        const counts = {...countsSnapshot};
+        
+        // Swap
+        const temp = bd[r1][c1];
+        bd[r1][c1] = bd[r2][c2];
+        bd[r2][c2] = temp;
+
+        let cycles = 0;
+        for (let iter = 0; iter < MAX_SIMULATION_DEPTH; iter++) {
+            const matches = findMatchesSim(bd);
+            if (matches.size === 0) break;           // corte temprano
+            cycles++;
+            for (const pos of matches) {
+                const [r, c] = pos.split(',').map(Number);
+                counts[bd[r][c]]--;
+                bd[r][c] = -1;
+            }
+            applyGravitySim(bd, counts);
         }
-        applyGravitySim(bd, counts);
-      }
-      return cycles;
+        return cycles;
     }
 
     function enumerateAdjacentSwaps() {
-      const swaps = [];
-      for (let r=0;r<ROWS;r++){
-        for (let c=0;c<COLS;c++){
-          if (c+1<COLS) swaps.push([r,c,r,c+1]);
-          if (r+1<ROWS) swaps.push([r,c,r+1,c]);
+        const swaps = [];
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (c + 1 < COLS) swaps.push([r, c, r, c + 1]);
+                if (r + 1 < ROWS) swaps.push([r, c, r + 1, c]);
+            }
         }
-      }
-      return swaps;
+        return swaps;
     }
 
     async function startAiSearch() {
-      if (!aiEnabled || isProcessing || gameEnded) return;
-      if (aiRunning) return;
+        if (!aiEnabled || isProcessing || gameEnded) return;
+        if (aiRunning) return;
 
-      aiAbort = false;
-      aiRunning = true;
-      aiTopSwaps = [];
-      updateAiStatus('BUSCANDO...');
-      document.getElementById('ai-top-list').innerHTML = '';
+        aiAbort = false;
+        aiRunning = true;
+        aiTopSwaps = [];
+        updateAiStatus('BUSCANDO...');
+        document.getElementById('ai-top-list').innerHTML = '';
 
-      const snapshot = cloneBoard(board);
-      const countsSnapshot = {...cellCounts};
-      const swaps = enumerateAdjacentSwaps();
+        const snapshot = cloneBoard(board);
+        const countsSnapshot = {...cellCounts};
+        const swaps = enumerateAdjacentSwaps();
 
-      let idx = 0;
-      const batchSize = 12; // Ajustado para rendimiento
+        let idx = 0;
+        const tick = () => {
+            if (aiAbort || !aiEnabled || isProcessing || gameEnded) {
+                aiRunning = false;
+                if (!aiEnabled) updateAiStatus('INACTIVA');
+                return;
+            }
 
-      const tick = () => {
-        if (aiAbort || !aiEnabled || isProcessing || gameEnded) {
-          aiRunning = false;
-          if (!aiEnabled) updateAiStatus('INACTIVA');
-          return;
-        }
+            const end = Math.min(swaps.length, idx + AI_BATCH_SIZE);
+            for (; idx < end; idx++) {
+                const [r1, c1, r2, c2] = swaps[idx];
+                const cycles = simulateSwapCycles(snapshot, countsSnapshot, r1, c1, r2, c2);
 
-        const end = Math.min(swaps.length, idx + batchSize);
-        for (; idx<end; idx++){
-          const [r1,c1,r2,c2] = swaps[idx];
-          const cycles = simulateSwapCycles(snapshot, countsSnapshot, r1,c1,r2,c2);
-          
-          if (cycles > 0) {
-            const currentSwap = { cycles, r1, c1, r2, c2 };
-            aiTopSwaps.push(currentSwap);
-            // Ordenar por ciclos descendente y mantener solo top 3
-            aiTopSwaps.sort((a, b) => (b.cycles - a.cycles) || (a.r1 - b.r1) || (a.c1 - b.c1));
-            if (aiTopSwaps.length > 3) aiTopSwaps.pop();
-            
-            blink_top_3_swaps();
-          }
-        }
+                if (cycles > 0) {
+                    const currentSwap = { cycles, r1, c1, r2, c2 };
+                    aiTopSwaps.push(currentSwap);
+                    aiTopSwaps.sort((a, b) => (b.cycles - a.cycles) || (a.r1 - b.r1) || (a.c1 - b.c1));
+                    if (aiTopSwaps.length > 3) aiTopSwaps.pop();
 
-        if (idx >= swaps.length){
-          aiRunning = false;
-          updateAiStatus('LISTO');
-          if (aiTopSwaps.length === 0) {
-              document.getElementById('ai-top-list').innerHTML = '<div style="font-size:8px;color:#800000">No se hallaron matches.</div>';
-          }
-          return;
-        }
-        setTimeout(tick, 0);
-      };
-      tick();
+                    blink_top_3_swaps();
+                }
+            }
+
+            if (idx >= swaps.length) {
+                aiRunning = false;
+                updateAiStatus('LISTO');
+                if (aiTopSwaps.length === 0) {
+                    document.getElementById('ai-top-list').innerHTML = '<div style="font-size:8px;color:#800000">No se hallaron matches.</div>';
+                }
+                return;
+            }
+            setTimeout(tick, 0);
+        };
+        tick();
     }
+
 
     // Se elimina el EventListener de resize porque el CSS maneja la responsividad dinámicamente
     window.onload = init;
