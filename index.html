@@ -738,7 +738,7 @@
                     write--;
                 }
             }
-            for (let r = write; r >= 0; r--) {
+            for (let r = 0; r <= write; r++) {
                 const val = getWeightedValueSim(r, c, bd, counts);
                 bd[r][c] = val;
                 counts[val]++;
